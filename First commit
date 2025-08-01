@@ -1,0 +1,131 @@
+import re
+
+PATTERN = r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-(?P<prerelease>[0-9A-Za-z.-]+))?(?:\+(?P<build>[0-9A-Za-z.-]+))?$"
+
+
+class Version:
+    def __init__(self, version):
+        match = re.match(PATTERN, version)
+
+        if not match:
+            raise ValueError(f"'{version}' is not a valid semantic version.")
+
+        self.major = match.group("major")
+        self.minor = match.group("minor")
+        self.patch = match.group("patch")
+        self.prerelease = match.group("prerelease")
+        self.build = match.group("build")
+        self.version = version
+
+
+    def compare_core(self, other):
+        """
+        compares two version cores
+        :param other:
+        :return:
+        """
+        core_parts = zip(
+            [self.major, self.minor, self.patch],
+            [other.major, other.minor, other.patch]
+        )
+        for self_part, other_part in core_parts:
+            if self_part < other_part:
+                return -1
+            if self_part > other_part:
+                return 1
+        return 0
+
+    def compare_prerelease(self, other):
+        """
+        compares two version prereleases
+        :param other:
+        :return:
+        """
+
+        #This piece of code exists to avoid None exception incase a version doesn't contain prerelease
+        if self.prerelease and not other.prerelease:
+            return -1
+        elif not self.prerelease and other.prerelease:
+            return 1
+        elif not self.prerelease and not other.prerelease:
+            return 0
+
+        id1 = self.prerelease.split(".")
+        id2 = other.prerelease.split(".")
+        for id1, id2 in zip(id1, id2):
+
+            is_num1 = id1.isdigit()
+            is_num2 = id2.isdigit()
+
+            if is_num1 and is_num2:
+                if int(id1) < int(id2):
+                    return -1
+                if int(id1) > int(id2):
+                    return 1
+
+            if not is_num1 and not is_num2:
+                if id1 < id2:
+                    return -1
+                if id1 > id2:
+                    return 1
+
+            if is_num1 and not is_num2:
+                return -1
+
+            if is_num2 and not is_num1:
+                return 1
+
+        if len(id1) < len(id2):
+            return -1
+        if len(id1) > len(id2):
+            return 1
+
+        return 0
+
+    def __lt__(self, other):
+        if self.compare_core(other) == -1:
+            return True
+        elif self.compare_core(other) == 1:
+            return False
+
+        if self.compare_prerelease(other) == -1:
+            return True
+        elif self.compare_prerelease(other) == 1:
+            return False
+
+        return False
+
+    def __eq__(self, other):
+        return self.compare_core(other) == 0 and self.compare_prerelease(other) == 0
+
+
+    def __gt__(self, other):
+        return not self.__lt__(other) and not self.__eq__(other)
+
+    def __le__(self, other):
+        return self.__lt__(other) or self.__eq__(other)
+
+    def __ge__(self, other):
+        return self.__gt__(other) or self.__eq__(other)
+
+
+def main():
+    to_test = [
+        ("1.0.0", "2.0.0"),
+        ("1.0.0", "1.42.0"),
+        ("1.2.0", "1.2.42"),
+        ("1.1.0-alpha", "1.2.0-alpha.1"),
+        ("1.0.1-b", "1.0.10-alpha.beta"),
+        ("1.0.0-rc.1", "1.0.0"),
+    ]
+
+    for left, right in to_test:
+        assert Version(left) < Version(right), "le failed"
+        assert Version(right) > Version(left), "ge failed"
+        assert Version(right) != Version(left), "neq failed"
+    print(Version("1.0.0-beta.1") < Version("1.0.0-beta"))
+
+
+
+if __name__ == "__main__":
+    main()
