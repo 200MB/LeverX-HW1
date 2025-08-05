@@ -2,9 +2,30 @@ import re
 from functools import total_ordering
 
 PATTERN = (
-    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"(?:-(?P<prerelease>[0-9A-Za-z.-]+))?"
-    r"(?:\+(?P<build>[0-9A-Za-z.-]+))?$"
+    r"^(?P<major>0|[1-9]\d*)\."
+    r"(?P<minor>0|[1-9]\d*)\."
+    r"(?P<patch>0|[1-9]\d*)"
+    r"(?:-"
+    r"(?P<prerelease>"
+    r"(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*"
+    r")"
+    r")?"
+    r"(?:\+"
+    r"(?P<build>"
+    r"[0-9A-Za-z-]+"
+    r"(?:\.[0-9A-Za-z-]+)*"
+    r")"
+    r")?$"
+)
+
+COMPATIBILITY_MODE = (
+    r"^(?P<major>0|[1-9]\d*)\."
+    r"(?P<minor>0|[1-9]\d*)\."
+    r"(?P<patch>0|[1-9]\d*)"
+    r"(?:(?P<prerelease>"
+    r"(?:rc|[a-zA-Z])\d*"
+    r"))?$"
 )
 
 
@@ -12,20 +33,61 @@ PATTERN = (
 class Version:
     """Represents a semantic version and provides comparison operators."""
 
+    def _set_values(self, match, comp_match):
+        """
+        Set Version values depending on which regex is matched.
+        """
+        if match:
+            self.major = int(match.group("major"))
+            self.minor = int(match.group("minor"))
+            self.patch = int(match.group("patch"))
+            self.prerelease = match.group("prerelease")
+            self.build = match.group("build")
+        else:
+            self.major = int(comp_match.group("major"))
+            self.minor = int(comp_match.group("minor"))
+            self.patch = int(comp_match.group("patch"))
+            self.prerelease = comp_match.group("prerelease")
+            self.build = None
+
+        # Post-process prerelease if compatibility mode matched and prerelease exists
+        if self.prerelease and not match:  # Only if comp_match is used (compat mode)
+            self.prerelease = self._normalize_prerelease(self.prerelease)
+
+    @staticmethod
+    def _normalize_prerelease(prerelease_str):
+        """
+        Convert shorthand prerelease like 'b1' or 'rc222' into 'b-1' or 'rc-222'.
+        If no trailing digits, return as-is.
+        Its worth noting that fallback is never reached.
+        """
+        # Match prefix letters (like 'b', 'rc') and trailing digits
+        m = re.match(r"^(rc|[a-zA-Z])(\d*)$", prerelease_str)
+        if m:
+            prefix, number = m.groups()
+            if number:
+                return f"{prefix}-{int(number)}"  # convert number to int to remove leading zeros
+            else:
+                return prefix  # no number to append
+        return prerelease_str  # fallback, return unchanged
+
     def __init__(self, version):
         """Initialize the Version instance from a version string."""
 
         match = re.match(PATTERN, version)
+        comp_match = re.match(COMPATIBILITY_MODE, version)
 
-        if not match:
+        if not match and not comp_match:
             raise ValueError(f"'{version}' is not a valid semantic version.")
 
-        self.major = match.group("major")
-        self.minor = match.group("minor")
-        self.patch = match.group("patch")
-        self.prerelease = match.group("prerelease")
-        self.build = match.group("build")
+        self.major = None
+        self.minor = None
+        self.patch = None
+        self.prerelease = None
+        self.build = None
         self.version = version
+
+        self._set_values(match, comp_match)
 
     def compare_core(self, other):
         """Compare the core version (major, minor, patch) parts."""
@@ -111,7 +173,7 @@ def main():
         ("1.0.0", "1.42.0"),
         ("1.2.0", "1.2.42"),
         ("1.1.0-alpha", "1.2.0-alpha.1"),
-        ("1.0.1-b", "1.0.10-alpha.beta"),
+        ("1.0.1b", "1.0.10-alpha.beta"),
         ("1.0.0-rc.1", "1.0.0"),
     ]
 
