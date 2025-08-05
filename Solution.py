@@ -1,5 +1,5 @@
 import re
-
+from functools import total_ordering
 
 PATTERN = (
     r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
@@ -8,11 +8,13 @@ PATTERN = (
 )
 
 
+@total_ordering
 class Version:
     """Represents a semantic version and provides comparison operators."""
 
     def __init__(self, version):
         """Initialize the Version instance from a version string."""
+
         match = re.match(PATTERN, version)
 
         if not match:
@@ -98,19 +100,8 @@ class Version:
 
     def __eq__(self, other):
         """Return true if versions are equal."""
-        return self.compare_core(other) == 0 and self.compare_prerelease(other) == 0
-
-
-    def __gt__(self, other):
-        return not self.__lt__(other) and not self.__eq__(other)
-
-
-    def __le__(self, other):
-        return self.__lt__(other) or self.__eq__(other)
-
-
-    def __ge__(self, other):
-        return self.__gt__(other) or self.__eq__(other)
+        return (self.compare_core(other) == 0
+                and self.compare_prerelease(other) == 0)
 
 
 def main():
