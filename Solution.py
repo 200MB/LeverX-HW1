@@ -1,10 +1,18 @@
 import re
 
-PATTERN = r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-(?P<prerelease>[0-9A-Za-z.-]+))?(?:\+(?P<build>[0-9A-Za-z.-]+))?$"
+
+PATTERN = (
+    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
+    r"(?:-(?P<prerelease>[0-9A-Za-z.-]+))?"
+    r"(?:\+(?P<build>[0-9A-Za-z.-]+))?$"
+)
 
 
 class Version:
+    """Represents a semantic version and provides comparison operators."""
+
     def __init__(self, version):
+        """Initialize the Version instance from a version string."""
         match = re.match(PATTERN, version)
 
         if not match:
@@ -17,16 +25,11 @@ class Version:
         self.build = match.group("build")
         self.version = version
 
-
     def compare_core(self, other):
-        """
-        compares two version cores
-        :param other:
-        :return:
-        """
+        """Compare the core version (major, minor, patch) parts."""
         core_parts = zip(
             [self.major, self.minor, self.patch],
-            [other.major, other.minor, other.patch]
+            [other.major, other.minor, other.patch],
         )
         for self_part, other_part in core_parts:
             if self_part < other_part:
@@ -36,23 +39,18 @@ class Version:
         return 0
 
     def compare_prerelease(self, other):
-        """
-        compares two version prereleases
-        :param other:
-        :return:
-        """
-
-        #This piece of code exists to avoid None exception incase a version doesn't contain prerelease
+        """Compare the prerelease parts of two versions."""
+        # Avoid None exception in case a version doesn't contain prerelease
         if self.prerelease and not other.prerelease:
             return -1
-        elif not self.prerelease and other.prerelease:
+        if not self.prerelease and other.prerelease:
             return 1
-        elif not self.prerelease and not other.prerelease:
+        if not self.prerelease and not other.prerelease:
             return 0
 
-        id1 = self.prerelease.split(".")
-        id2 = other.prerelease.split(".")
-        for id1, id2 in zip(id1, id2):
+        id1_parts = self.prerelease.split(".")
+        id2_parts = other.prerelease.split(".")
+        for id1, id2 in zip(id1_parts, id2_parts):
 
             is_num1 = id1.isdigit()
             is_num2 = id2.isdigit()
@@ -75,41 +73,48 @@ class Version:
             if is_num2 and not is_num1:
                 return 1
 
-        if len(id1) < len(id2):
+        if len(id1_parts) < len(id2_parts):
             return -1
-        if len(id1) > len(id2):
+        if len(id1_parts) > len(id2_parts):
             return 1
 
         return 0
 
     def __lt__(self, other):
-        if self.compare_core(other) == -1:
+        """Return true if version is less than the other."""
+        core_cmp = self.compare_core(other)
+        if core_cmp == -1:
             return True
-        elif self.compare_core(other) == 1:
+        if core_cmp == 1:
             return False
 
-        if self.compare_prerelease(other) == -1:
+        pre_cmp = self.compare_prerelease(other)
+        if pre_cmp == -1:
             return True
-        elif self.compare_prerelease(other) == 1:
+        if pre_cmp == 1:
             return False
 
         return False
 
     def __eq__(self, other):
+        """Return true if versions are equal."""
         return self.compare_core(other) == 0 and self.compare_prerelease(other) == 0
 
 
     def __gt__(self, other):
         return not self.__lt__(other) and not self.__eq__(other)
 
+
     def __le__(self, other):
         return self.__lt__(other) or self.__eq__(other)
+
 
     def __ge__(self, other):
         return self.__gt__(other) or self.__eq__(other)
 
 
 def main():
+    """Run basic tests for the Version comparison implementation."""
     to_test = [
         ("1.0.0", "2.0.0"),
         ("1.0.0", "1.42.0"),
@@ -123,8 +128,6 @@ def main():
         assert Version(left) < Version(right), "le failed"
         assert Version(right) > Version(left), "ge failed"
         assert Version(right) != Version(left), "neq failed"
-    
-
 
 
 if __name__ == "__main__":
