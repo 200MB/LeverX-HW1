@@ -1,42 +1,40 @@
 import re
 from functools import total_ordering
 
-PATTERN = (
-    r"^(?P<major>0|[1-9]\d*)\."
-    r"(?P<minor>0|[1-9]\d*)\."
-    r"(?P<patch>0|[1-9]\d*)"
-    r"(?:-"
-    r"(?P<prerelease>"
-    r"(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)"
-    r"(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*"
-    r")"
-    r")?"
-    r"(?:\+"
-    r"(?P<build>"
-    r"[0-9A-Za-z-]+"
-    r"(?:\.[0-9A-Za-z-]+)*"
-    r")"
-    r")?$"
-)
-
-COMPATIBILITY_MODE = (
-    r"^(?P<major>0|[1-9]\d*)\."
-    r"(?P<minor>0|[1-9]\d*)\."
-    r"(?P<patch>0|[1-9]\d*)"
-    r"(?:(?P<prerelease>"
-    r"(?:rc|[a-zA-Z])\d*"
-    r"))?$"
-)
-
 
 @total_ordering
 class Version:
     """Represents a semantic version and provides comparison operators."""
 
+    PATTERN = (
+        r"^(?P<major>0|[1-9]\d*)\."
+        r"(?P<minor>0|[1-9]\d*)\."
+        r"(?P<patch>0|[1-9]\d*)"
+        r"(?:-"
+        r"(?P<prerelease>"
+        r"(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)"
+        r"(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*"
+        r")"
+        r")?"
+        r"(?:\+"
+        r"(?P<build>"
+        r"[0-9A-Za-z-]+"
+        r"(?:\.[0-9A-Za-z-]+)*"
+        r")"
+        r")?$"
+    )
+
+    COMPATIBILITY_MODE = (
+        r"^(?P<major>0|[1-9]\d*)\."
+        r"(?P<minor>0|[1-9]\d*)\."
+        r"(?P<patch>0|[1-9]\d*)"
+        r"(?:(?P<prerelease>"
+        r"(?:rc|[a-zA-Z])\d*"
+        r"))?$"
+    )
+
     def _set_values(self, match, comp_match):
-        """
-        Set Version values depending on which regex is matched.
-        """
+        """Set Version values depending on which regex is matched."""
         if match:
             self.major = int(match.group("major"))
             self.minor = int(match.group("minor"))
@@ -50,32 +48,24 @@ class Version:
             self.prerelease = comp_match.group("prerelease")
             self.build = None
 
-        # Post-process prerelease if compatibility mode matched and prerelease exists
-        if self.prerelease and not match:  # Only if comp_match is used (compat mode)
+        if self.prerelease and not match:
             self.prerelease = self._normalize_prerelease(self.prerelease)
 
     @staticmethod
     def _normalize_prerelease(prerelease_str):
-        """
-        Convert shorthand prerelease like 'b1' or 'rc222' into 'b-1' or 'rc-222'.
-        If no trailing digits, return as-is.
-        Its worth noting that fallback is never reached.
-        """
-        # Match prefix letters (like 'b', 'rc') and trailing digits
+        """Convert shorthand prerelease (e.g., 'b1') into a normalized form (e.g., 'b-1')."""
         m = re.match(r"^(rc|[a-zA-Z])(\d*)$", prerelease_str)
         if m:
             prefix, number = m.groups()
             if number:
-                return f"{prefix}-{int(number)}"  # convert number to int to remove leading zeros
-            else:
-                return prefix  # no number to append
-        return prerelease_str  # fallback, return unchanged
+                return f"{prefix}-{int(number)}"
+            return prefix
+        return prerelease_str
 
     def __init__(self, version):
         """Initialize the Version instance from a version string."""
-
-        match = re.match(PATTERN, version)
-        comp_match = re.match(COMPATIBILITY_MODE, version)
+        match = re.match(self.PATTERN, version)
+        comp_match = re.match(self.COMPATIBILITY_MODE, version)
 
         if not match and not comp_match:
             raise ValueError(f"'{version}' is not a valid semantic version.")
@@ -91,11 +81,10 @@ class Version:
 
     def compare_core(self, other):
         """Compare the core version (major, minor, patch) parts."""
-        core_parts = zip(
+        for self_part, other_part in zip(
             [self.major, self.minor, self.patch],
             [other.major, other.minor, other.patch],
-        )
-        for self_part, other_part in core_parts:
+        ):
             if self_part < other_part:
                 return -1
             if self_part > other_part:
@@ -104,7 +93,6 @@ class Version:
 
     def compare_prerelease(self, other):
         """Compare the prerelease parts of two versions."""
-        # Avoid None exception in case a version doesn't contain prerelease
         if self.prerelease and not other.prerelease:
             return -1
         if not self.prerelease and other.prerelease:
@@ -115,7 +103,6 @@ class Version:
         id1_parts = self.prerelease.split(".")
         id2_parts = other.prerelease.split(".")
         for id1, id2 in zip(id1_parts, id2_parts):
-
             is_num1 = id1.isdigit()
             is_num2 = id2.isdigit()
 
@@ -124,24 +111,20 @@ class Version:
                     return -1
                 if int(id1) > int(id2):
                     return 1
-
-            if not is_num1 and not is_num2:
+            elif not is_num1 and not is_num2:
                 if id1 < id2:
                     return -1
                 if id1 > id2:
                     return 1
-
-            if is_num1 and not is_num2:
+            elif is_num1 and not is_num2:
                 return -1
-
-            if is_num2 and not is_num1:
+            elif is_num2 and not is_num1:
                 return 1
 
         if len(id1_parts) < len(id2_parts):
             return -1
         if len(id1_parts) > len(id2_parts):
             return 1
-
         return 0
 
     def __lt__(self, other):
@@ -153,17 +136,14 @@ class Version:
             return False
 
         pre_cmp = self.compare_prerelease(other)
-        if pre_cmp == -1:
-            return True
-        if pre_cmp == 1:
-            return False
-
-        return False
+        return pre_cmp == -1
 
     def __eq__(self, other):
         """Return true if versions are equal."""
-        return (self.compare_core(other) == 0
-                and self.compare_prerelease(other) == 0)
+        return (
+            self.compare_core(other) == 0
+            and self.compare_prerelease(other) == 0
+        )
 
 
 def main():
